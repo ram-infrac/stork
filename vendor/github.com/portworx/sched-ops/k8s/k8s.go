@@ -422,6 +422,8 @@ type ClusterPairOps interface {
 	ListClusterPairs() (*v1alpha1.ClusterPairList, error)
 	// DeleteClusterPair deletes the ClusterPair
 	DeleteClusterPair(string) error
+	// ValidateClusterPair validates clusterpair status
+	ValidateClusterPair(name string, timeout, retryInterval time.Duration) error
 }
 
 // MigrationOps is an interface to perfrom k8s Migration operations
@@ -436,6 +438,8 @@ type MigrationOps interface {
 	UpdateMigration(*v1alpha1.Migration) (*v1alpha1.Migration, error)
 	// DeleteMigration deletes the Migration
 	DeleteMigration(string) error
+	// ValidateMigration validate the Migration status
+	ValidateMigration(name string, timeout, retryInterval time.Duration) error
 }
 
 // CustomResource is for creating a Kubernetes TPR/CRD
@@ -484,6 +488,17 @@ func (k *k8sOps) SetConfig(config *rest.Config) {
 	// Set the config and reset the client
 	k.config = config
 	k.client = nil
+}
+
+// NewInstance returns new instance of k8sOps by using given config
+func NewInstance(config string) (Ops, error) {
+	newInstance := &k8sOps{}
+	err := newInstance.loadClientFromKubeconfig(config)
+	if err != nil {
+		logrus.Errorf("Unable to set new instance: %v", err)
+		return nil, err
+	}
+	return newInstance, nil
 }
 
 // Initialize the k8s client if uninitialized
@@ -2778,6 +2793,38 @@ func (k *k8sOps) DeleteClusterPair(name string) error {
 	})
 }
 
+func (k *k8sOps) ValidateClusterPair(name string, timeout, retryInterval time.Duration) error {
+	if err := k.initK8sClient(); err != nil {
+		return err
+	}
+	t := func() (interface{}, bool, error) {
+		clusterPair, err := k.GetClusterPair(name)
+		if err != nil {
+			return "", true, err
+		}
+		if clusterPair.Status.SchedulerStatus == v1alpha1.ClusterPairStatusReady &&
+			clusterPair.Status.StorageStatus == v1alpha1.ClusterPairStatusReady {
+			return "", false, nil
+		} else if clusterPair.Status.SchedulerStatus == v1alpha1.ClusterPairStatusError ||
+			clusterPair.Status.StorageStatus == v1alpha1.ClusterPairStatusError {
+			return "", true, &ErrFailedToValidateCustomSpec{
+				Name:  name,
+				Cause: fmt.Sprintf("Storage Status %v \t Schedular Status %v", clusterPair.Status.StorageStatus, clusterPair.Status.SchedulerStatus),
+				Type:  clusterPair,
+			}
+		}
+		return "", true, &ErrFailedToValidateCustomSpec{
+			Name:  name,
+			Cause: fmt.Sprintf("Storage Status %v \t Schedular Status %v", clusterPair.Status.StorageStatus, clusterPair.Status.SchedulerStatus),
+			Type:  clusterPair,
+		}
+	}
+	if _, err := task.DoRetryWithTimeout(t, timeout, retryInterval); err != nil {
+		return err
+	}
+	return nil
+}
+
 // ClusterPair APIs - END
 
 // Migration APIs - BEGIN
@@ -2822,6 +2869,36 @@ func (k *k8sOps) UpdateMigration(migration *v1alpha1.Migration) (*v1alpha1.Migra
 	}
 
 	return k.storkClient.Stork().Migrations().Update(migration)
+}
+
+func (k *k8sOps) ValidateMigration(name string, timeout, retryInterval time.Duration) error {
+	if err := k.initK8sClient(); err != nil {
+		return err
+	}
+	t := func() (interface{}, bool, error) {
+		resp, err := k.GetMigration(name)
+		if err != nil {
+			return "", true, err
+		}
+		if resp.Status.Status == v1alpha1.MigrationStatusSuccessful {
+			return "", false, nil
+		} else if resp.Status.Status == v1alpha1.MigrationStatusFailed {
+			return "", true, &ErrFailedToValidateCustomSpec{
+				Name:  name,
+				Cause: fmt.Sprintf("Migration Status %v", resp.Status.Status),
+				Type:  resp,
+			}
+		}
+		return "", true, &ErrFailedToValidateCustomSpec{
+			Name:  name,
+			Cause: fmt.Sprintf("Migration Status %v", resp.Status.Status),
+			Type:  resp,
+		}
+	}
+	if _, err := task.DoRetryWithTimeout(t, timeout, retryInterval); err != nil {
+		return err
+	}
+	return nil
 }
 
 // Migration APIs - END

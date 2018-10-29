@@ -4,11 +4,17 @@ package integrationtest
 
 import (
 	"flag"
+	"fmt"
+	"html/template"
+	"io/ioutil"
+	"os"
 	"testing"
 	"time"
 
 	storkdriver "github.com/libopenstorage/stork/drivers/volume"
 	_ "github.com/libopenstorage/stork/drivers/volume/portworx"
+	"github.com/portworx/sched-ops/k8s"
+	"github.com/portworx/spawn/log"
 	"github.com/portworx/torpedo/drivers/node"
 	_ "github.com/portworx/torpedo/drivers/node/ssh"
 	"github.com/portworx/torpedo/drivers/scheduler"
@@ -18,6 +24,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/skyrings/skyring-common/tools/uuid"
 	"github.com/stretchr/testify/require"
+	yaml "gopkg.in/yaml.v2"
 )
 
 const (
@@ -199,6 +206,77 @@ func verifyScheduledNode(t *testing.T, appNode node.Node, volumes []string) {
 
 	logrus.Infof("Scores: %v", scores)
 	require.Equal(t, highScore, scores[appNode.Name], "Scheduled node does not have the highest score")
+}
+
+// createClusterPairSpec from specification
+func CreateClusterPairSpec(req ClusterPairRequest) error {
+	// parseKubeConfig file from configMap
+	kubeSpec, err := parseKubeConfig(req.ConfigMapName)
+	if err != nil {
+		return err
+	}
+
+	// CreateClusterPair spec req
+	clusterPair := &ClusterPair{
+		PairName:             req.PairName,
+		RemoteIP:             req.RemoteIP,
+		RemotePort:           req.RemotePort,
+		RemoteToken:          req.RemoteClusterToken,
+		RemoteKubeServer:     kubeSpec.ClusterInfo[0].Cluster["server"],
+		RemoteConfigAuthData: kubeSpec.ClusterInfo[0].Cluster["certificate-authority-data"],
+		RemoteConfigKeyData:  kubeSpec.UserInfo[0].User["client-key-data"],
+		RemoteConfigCertData: kubeSpec.UserInfo[0].User["client-certificate-data"],
+	}
+	// Create pair file
+	t := template.New("clusterPair")
+	t.Parse(clusterPairSpec)
+	//This should be path of clusterpair yaml
+	f, err := os.Create(req.SpecDirPath + pairFileName)
+	if err != nil {
+		log.Error("Unable to create clusterPair.yaml: %v", err)
+		return err
+	}
+	if err := t.Execute(f, clusterPair); err != nil {
+		log.Error("Couldn't write to clsuterPair.yaml: %v", err)
+		return err
+	}
+	logrus.Info("Created Clusterpair file:", req.SpecDirPath+pairFileName)
+	return nil
+}
+
+func dumpRemoteKubeConfig(configObject string) error {
+	cm, err := k8s.Instance().GetConfigMap(configObject, "kube-system")
+	if err != nil {
+		logrus.Errorf("Error reading config map: %v", err)
+		return err
+	}
+	status := cm.Data["kubeconfig"]
+	if len(status) == 0 {
+		logrus.Info("found empty failure status for key:remoteConifg in config map")
+		return fmt.Errorf("Empty kubeconfig for remote cluster")
+	}
+	// dump to remoteFilePath
+	return ioutil.WriteFile(remoteFilePath, []byte(status), 0644)
+}
+
+func parseKubeConfig(configObject string) (*KubeConfigSpec, error) {
+	var spec *KubeConfigSpec
+	cm, err := k8s.Instance().GetConfigMap(configObject, "kube-system")
+	if err != nil {
+		logrus.Errorf("Error reading config map %v", err)
+		return nil, err
+	}
+	status := cm.Data["kubeconfig"]
+	if len(status) == 0 {
+		logrus.Info("found empty failure status for key:remoteConifg in config map")
+		return nil, fmt.Errorf("Empty kubeconfig for remote cluster")
+	}
+	err = yaml.Unmarshal([]byte(status), &spec)
+	if err != nil {
+		fmt.Println("Error parsing kubeconfig file", err)
+		return nil, err
+	}
+	return spec, nil
 }
 
 func init() {

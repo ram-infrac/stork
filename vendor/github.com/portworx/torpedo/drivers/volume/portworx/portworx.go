@@ -5,6 +5,7 @@ import (
 	"math"
 	"reflect"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -33,6 +34,12 @@ const (
 	enterMaintenancePath    = "/entermaintenance"
 	exitMaintenancePath     = "/exitmaintenance"
 	pxSystemdServiceName    = "portworx.service"
+	tokenKey                = "token"
+	clusterIP               = "clusterip"
+	clusterPort             = "clusterport"
+	remoteKubeConfigPath    = "/tmp/kubeconfig"
+	tokenPath               = "/v1/cluster/pairtoken"
+	objectstorPath          = "/objectstore"
 )
 
 const (
@@ -45,8 +52,8 @@ const (
 	validateReplicationUpdateTimeout = 10 * time.Minute
 	validateClusterStartTimeout      = 2 * time.Minute
 	validateNodeStartTimeout         = 2 * time.Minute
-	validatePXStartTimeout           = 2 * time.Minute
 	validateNodeStopTimeout          = 2 * time.Minute
+	validatePXStartTimeout           = 2 * time.Minute
 	stopDriverTimeout                = 5 * time.Minute
 	crashDriverTimeout               = 2 * time.Minute
 	startDriverTimeout               = 2 * time.Minute
@@ -974,6 +981,15 @@ func (d *portworx) getClusterManager() cluster.Cluster {
 
 }
 
+func (d *portworx) getVolumeDriverByAddress(addr string) (volume.VolumeDriver, error) {
+	pxEndpoint := d.constructURL(addr)
+	dClient, err := volumeclient.NewDriverClient(pxEndpoint, DriverName, "", pxdClientSchedUserAgent)
+	if err != nil {
+		return nil, err
+	}
+	return volumeclient.VolumeDriver(dClient), nil
+}
+
 func (d *portworx) getClusterManagerByAddress(addr string) (cluster.Cluster, error) {
 	pxEndpoint := d.constructURL(addr)
 	cClient, err := clusterclient.NewClusterClient(pxEndpoint, "v1")
@@ -993,6 +1009,65 @@ func (d *portworx) maintenanceOp(n node.Node, op string) error {
 	req := c.Get().Resource(op)
 	resp := req.Do()
 	return resp.Error()
+}
+func (d *portworx) setupObjectstore(pxNode node.Node) error {
+	volDriver, err := d.getVolumeDriverByAddress(pxNode.Addresses[0])
+	if err != nil {
+		return err
+	}
+	name := "objVolume"
+	req := &api.VolumeCreateRequest{
+		Locator: &api.VolumeLocator{Name: name},
+		Source:  &api.Source{},
+		Spec: &api.VolumeSpec{
+			Size:    50,
+			Format:  api.FSType_FS_TYPE_EXT4,
+			HaLevel: 1,
+		},
+	}
+	volID, err := volDriver.Create(req.GetLocator(), req.GetSource(), req.GetSpec())
+	if err != nil {
+		logrus.Errorf("Unable to create objectstore volume: %v", volID)
+		return err
+	}
+	return createObjectstore(d.constructURL(pxNode.Addresses[0]), volID)
+}
+func createObjectstore(pxEndpoint, volID string) error {
+	c, err := client.NewClient(pxEndpoint, "", "")
+	if err != nil {
+		return err
+	}
+	req := c.Post().Resource(objectstorPath)
+	req.QueryOption("volumeid", volID)
+	logrus.Info("Objectstore URL:v", req.URL().String())
+	resp := req.Do()
+	return resp.Error()
+}
+
+// GetClusterPairingInfo return underlying storage details
+func (d *portworx) GetClusterPairingInfo() (map[string]string, error) {
+	pairInfo := make(map[string]string)
+	pxNodes, err := d.schedOps.GetRemotePXNodes(remoteKubeConfigPath)
+	if err != nil {
+		logrus.Errorf("err retriving remote px nodes: %v", err)
+		return pairInfo, err
+	}
+	err = d.setupObjectstore(pxNodes[0])
+	if err != nil {
+		logrus.Errorf("Unable to set objectstore: %v", err)
+		return pairInfo, err
+	}
+	clusterMgr, err := d.getClusterManagerByAddress(pxNodes[0].Addresses[0])
+	resp, err := clusterMgr.GetPairToken(true)
+	if err != nil {
+		return pairInfo, err
+	}
+	logrus.Info("Response for token:", resp.Token)
+	// file up cluster pair info
+	pairInfo[clusterIP] = pxNodes[0].Addresses[0]
+	pairInfo[tokenKey] = resp.Token
+	pairInfo[clusterPort] = strconv.Itoa(pxdRestPort)
+	return pairInfo, nil
 }
 
 func (d *portworx) constructURL(ip string) string {

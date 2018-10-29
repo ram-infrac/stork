@@ -512,6 +512,53 @@ func (k *k8sSchedOps) IsPXEnabled(n node.Node) (bool, error) {
 	return true, nil
 }
 
+// GetStorageInfo returns cluster pair info from destination cluster refereced by kubeconfig
+func (k *k8sSchedOps) GetRemotePXNodes(destKubeConfig string) ([]node.Node, error) {
+	var addrs []string
+	var pxNodes []node.Node
+	pxNode, err := getPXNode(destKubeConfig)
+	if err != nil {
+		logrus.Errorf("Error getting Node %v : %v", pxNode, err)
+		return pxNodes, err
+	}
+	logrus.Info("px node on remote :", pxNode.Name)
+	for _, addr := range pxNode.Status.Addresses {
+		if addr.Type == corev1.NodeExternalIP || addr.Type == corev1.NodeInternalIP {
+			addrs = append(addrs, addr.Address)
+		}
+	}
+	newNode := node.Node{
+		Name:      pxNode.Name,
+		Addresses: addrs,
+		Type:      node.TypeWorker,
+	}
+	pxNodes = append(pxNodes, newNode)
+	return pxNodes, nil
+}
+
+// return PX node on k8s cluster provided by kubeconfig file
+func getPXNode(destKubeConfig string) (corev1.Node, error) {
+	var workerNode corev1.Node
+	// get schd-ops/k8s instance of destination cluster
+	destClient, err := k8s.NewInstance(destKubeConfig)
+	if err != nil {
+		logrus.Errorf("Unable to get k8s instance: %v", err)
+		return workerNode, err
+	}
+	nodes, err := destClient.GetNodes()
+	if err != nil {
+		return workerNode, err
+	}
+	// on all worker node
+	for _, node := range nodes.Items {
+		if !destClient.IsNodeMaster(node) {
+			workerNode = node
+			break
+		}
+	}
+	return workerNode, nil
+}
+
 // getContainerPVCMountMap is a helper routine to return map of containers in the pod that
 // have a PVC. The values in the map are the mount paths of the PVC
 func getContainerPVCMountMap(pod corev1.Pod) map[string]string {

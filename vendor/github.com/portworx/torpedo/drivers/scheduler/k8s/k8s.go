@@ -210,8 +210,11 @@ func validateSpec(in interface{}) (interface{}, error) {
 		return specObj, nil
 	} else if specObj, ok := in.(*v1.Pod); ok {
 		return specObj, nil
+	} else if specObj, ok := in.(*stork_api.ClusterPair); ok {
+		return specObj, nil
+	} else if specObj, ok := in.(*stork_api.Migration); ok {
+		return specObj, nil
 	}
-
 	return nil, fmt.Errorf("Unsupported object: %v", reflect.TypeOf(in))
 }
 
@@ -633,7 +636,11 @@ func (k *k8s) substituteNamespaceInVolumes(volumes []v1.Volume, ns string) []v1.
 }
 
 func (k *k8s) WaitForRunning(ctx *scheduler.Context, timeout, retryInterval time.Duration) error {
-	k8sOps := k8s_ops.Instance()
+	k8sOps, err := k8s_ops.NewInstance(ctx.KubeConfig)
+	if err != nil {
+		logrus.Errorf("Error in loading k8s %v", err)
+		return err
+	}
 	for _, spec := range ctx.App.SpecList {
 		if obj, ok := spec.(*apps_api.Deployment); ok {
 			if err := k8sOps.ValidateDeployment(obj, timeout, retryInterval); err != nil {
@@ -1358,7 +1365,7 @@ func (k *k8s) StopSchedOnNode(n node.Node) error {
 	}
 	err := driver.Systemctl(n, SystemdSchedServiceName, systemOpts)
 	if err != nil {
-		return &scheduler.ErrFailedToStopSchedOnNode {
+		return &scheduler.ErrFailedToStopSchedOnNode{
 			Node:          n,
 			SystemService: SystemdSchedServiceName,
 			Cause:         err.Error(),
@@ -1378,12 +1385,52 @@ func (k *k8s) StartSchedOnNode(n node.Node) error {
 	}
 	err := driver.Systemctl(n, SystemdSchedServiceName, systemOpts)
 	if err != nil {
-		return &scheduler.ErrFailedToStartSchedOnNode {
+		return &scheduler.ErrFailedToStartSchedOnNode{
 			Node:          n,
 			SystemService: SystemdSchedServiceName,
 			Cause:         err.Error(),
 		}
 	}
+	return nil
+}
+
+func (k *k8s) CreateCRDObjects(pathCRDSpec string) error {
+	specs, err := k.ParseSpecs(pathCRDSpec)
+	if err != nil {
+		return err
+	}
+	k8sOps := k8s_ops.Instance()
+	for _, specObj := range specs {
+		if obj, ok := specObj.(*stork_api.ClusterPair); ok {
+			logrus.Info("Applying clusterpair specs")
+			err = k8sOps.CreateClusterPair(obj)
+			if err != nil {
+				logrus.Info("Error Creating Cluster Pair", err)
+			}
+			if err := k8sOps.ValidateClusterPair(obj.Name, defaultTimeout, defaultRetryInterval); err != nil {
+				return &scheduler.ErrFailedToApplyCustomSpec{
+					Name:  obj.Name,
+					Cause: fmt.Sprintf("Failed to validate cluster Pair: %v. Err: %v", obj.Name, err),
+				}
+			}
+		} else if obj, ok := specObj.(*stork_api.Migration); ok {
+			logrus.Info("Applying Migration Spec")
+			err = k8sOps.CreateMigration(obj)
+			if err != nil {
+				logrus.Info("Error Creating Migration", err)
+				return err
+			}
+			if err := k8sOps.ValidateMigration(obj.Name, defaultTimeout, defaultRetryInterval); err != nil {
+				return &scheduler.ErrFailedToApplyCustomSpec{
+					Name:  obj.Name,
+					Cause: fmt.Sprintf("Failed to validate cluster Pair: %v. Err: %v", obj.Name, err),
+				}
+			}
+		} else {
+			return fmt.Errorf("Unsupported object: %v", reflect.TypeOf(specObj))
+		}
+	}
+	logrus.Info("Custom specs Created Sucessuflly")
 	return nil
 }
 

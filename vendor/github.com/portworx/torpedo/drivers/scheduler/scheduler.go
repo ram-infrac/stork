@@ -20,8 +20,9 @@ const (
 
 // Context holds the execution context of a test task.
 type Context struct {
-	UID string
-	App *spec.AppSpec
+	UID        string
+	App        *spec.AppSpec
+	KubeConfig string
 }
 
 // ScheduleOptions are options that callers to pass to influence the apps that get schduled
@@ -92,6 +93,9 @@ type Driver interface {
 
 	// Start scheduler service on the given node
 	StartSchedOnNode(n node.Node) error
+
+	// CreateCRDObjects from spec provided
+	CreateCRDObjects(pathCRDSpec string) error
 }
 
 var (
