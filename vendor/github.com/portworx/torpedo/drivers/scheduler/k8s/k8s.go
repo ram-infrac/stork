@@ -636,7 +636,13 @@ func (k *k8s) substituteNamespaceInVolumes(volumes []v1.Volume, ns string) []v1.
 }
 
 func (k *k8s) WaitForRunning(ctx *scheduler.Context, timeout, retryInterval time.Duration) error {
-	k8sOps, err := k8s_ops.NewInstance(ctx.KubeConfig)
+	var err error
+	var k8sOps k8s_ops.Ops
+	if ctx.KubeConfig != "" {
+		k8sOps, err = k8s_ops.NewInstance(ctx.KubeConfig)
+	} else {
+		k8sOps = k8s_ops.Instance()
+	}
 	if err != nil {
 		logrus.Errorf("Error in loading k8s %v", err)
 		return err

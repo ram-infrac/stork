@@ -50,7 +50,7 @@ type ClusterPair struct {
 	PairName             string
 	RemoteIP             string
 	RemoteToken          string
-	RemotePort           string
+	RemotePort           int
 	RemoteKubeServer     string
 	RemoteConfigAuthData string
 	RemoteConfigKeyData  string

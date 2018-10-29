@@ -8,6 +8,7 @@ import (
 	"html/template"
 	"io/ioutil"
 	"os"
+	//	"strconv"
 	"testing"
 	"time"
 
@@ -84,10 +85,11 @@ func TestMain(t *testing.T) {
 	if passed := t.Run("setup", setup); !passed {
 		t.FailNow()
 	}
-	t.Run("Extender", testExtender)
-	t.Run("HealthMonitor", testHealthMonitor)
-	t.Run("Snapshot", testSnapshot)
-	t.Run("CmdExecutor", asyncPodCommandTest)
+	t.Run("testBasicCloudMigartion", testBasicCloudMigration)
+	/*	t.Run("Extender", testExtender)
+		t.Run("HealthMonitor", testHealthMonitor)
+		t.Run("Snapshot", testSnapshot)
+		t.Run("CmdExecutor", asyncPodCommandTest)*/
 }
 
 func generateInstanceID(t *testing.T, testName string) string {
@@ -220,7 +222,7 @@ func CreateClusterPairSpec(req ClusterPairRequest) error {
 	clusterPair := &ClusterPair{
 		PairName:             req.PairName,
 		RemoteIP:             req.RemoteIP,
-		RemotePort:           req.RemotePort,
+		RemotePort:           9001, //strconv.Atoi(req.RemotePort),
 		RemoteToken:          req.RemoteClusterToken,
 		RemoteKubeServer:     kubeSpec.ClusterInfo[0].Cluster["server"],
 		RemoteConfigAuthData: kubeSpec.ClusterInfo[0].Cluster["certificate-authority-data"],

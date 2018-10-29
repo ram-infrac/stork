@@ -50,9 +50,9 @@ spec:
     name: stork
     env:
     - name: TORPEDO_SSH_USER
-      value: username
+      value: root
     - name: TORPEDO_SSH_PASSWORD
-      value: password
+      value: Password1
   hostNetwork: false
   hostPID: false
   volumes: []

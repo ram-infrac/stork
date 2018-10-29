@@ -1020,7 +1020,7 @@ func (d *portworx) setupObjectstore(pxNode node.Node) error {
 		Locator: &api.VolumeLocator{Name: name},
 		Source:  &api.Source{},
 		Spec: &api.VolumeSpec{
-			Size:    50,
+			Size:    uint64(102400000000),
 			Format:  api.FSType_FS_TYPE_EXT4,
 			HaLevel: 1,
 		},
@@ -1030,7 +1030,7 @@ func (d *portworx) setupObjectstore(pxNode node.Node) error {
 		logrus.Errorf("Unable to create objectstore volume: %v", volID)
 		return err
 	}
-	return createObjectstore(d.constructURL(pxNode.Addresses[0]), volID)
+	return createObjectstore(d.constructURL(pxNode.Addresses[0]), name)
 }
 func createObjectstore(pxEndpoint, volID string) error {
 	c, err := client.NewClient(pxEndpoint, "", "")

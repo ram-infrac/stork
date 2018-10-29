@@ -35,29 +35,47 @@ func sanityCloudMigrationTest(t *testing.T) {
 	err = CreateClusterPairSpec(specReq)
 	require.NoError(t, err, "Error creating cluster Spec")
 	// appply cluster pair spec and check status
+
+	logrus.Info("applying clusterpair")
+	err = schedulerDriver.CreateCRDObjects("./" + pairFileName)
+	require.NoError(t, err, "Error applying clusterpair")
+	logrus.Info("done", err)
+}
+
+/* func runMysqlPods() {
 	ctxs, err := schedulerDriver.Schedule(generateInstanceID(t, "singlepvctest"),
 		scheduler.ScheduleOptions{AppKeys: []string{"mysql-1-pvc"}})
 	require.NoError(t, err, "Error scheduling task")
 	require.Equal(t, 1, len(ctxs), "Only one task should have started")
 
-	err = schedulerDriver.WaitForRunning(ctxs[0], 60, 10)
+	err = schedulerDriver.WaitForRunning(ctxs[0], 600, 10)
+	require.NoError(t, err, "Error waiting for pod to get to running state")
+}
+*/
+// apply cloudmigration spec and check status
+func sanityMigrationTest(t *testing.T) {
+	ctxs, err := schedulerDriver.Schedule("singlemysql",
+		scheduler.ScheduleOptions{AppKeys: []string{"mysql-1-pvc"}})
+	require.NoError(t, err, "Error scheduling task")
+	require.Equal(t, 1, len(ctxs), "Only one task should have started")
+
+	err = schedulerDriver.WaitForRunning(ctxs[0], defaultWaitTimeout, defaultWaitInterval)
 	require.NoError(t, err, "Error waiting for pod to get to running state")
 
-	err = schedulerDriver.CreateCRDObjects("./" + pairFileName)
-	// apply cloudmigration spec and check status
 	logrus.Info("Run Migration spec")
 	err = schedulerDriver.CreateCRDObjects("./migrs/migration.yml")
-	logrus.Info("err", err)
+	require.NoError(t, err, "Error applying migration specs")
+	logrus.Info("done", err)
 
 	ctxs[0].KubeConfig = remoteFilePath
-	err = schedulerDriver.WaitForRunning(ctxs[0], 60, 10)
+	err = schedulerDriver.WaitForRunning(ctxs[0], defaultWaitTimeout, defaultWaitInterval)
 	require.NoError(t, err, "Error waiting for pod to get to running state")
 
 	destroyAndWait(t, ctxs)
-}
 
-func sanityMigrationTest(t *testing.T) {
-	logrus.Info("Run Migration spec")
-	err := schedulerDriver.CreateCRDObjects("./tt/migration.yml")
-	logrus.Info("err", err)
+	ctxs[0].KubeConfig = ""
+	err = schedulerDriver.WaitForRunning(ctxs[0], defaultWaitTimeout, defaultWaitInterval)
+	require.NoError(t, err, "Error waiting for pod to get to running state")
+
+	destroyAndWait(t, ctxs)
 }
