@@ -1010,39 +1010,6 @@ func (d *portworx) maintenanceOp(n node.Node, op string) error {
 	resp := req.Do()
 	return resp.Error()
 }
-func (d *portworx) setupObjectstore(pxNode node.Node) error {
-	volDriver, err := d.getVolumeDriverByAddress(pxNode.Addresses[0])
-	if err != nil {
-		return err
-	}
-	name := "objVolume"
-	req := &api.VolumeCreateRequest{
-		Locator: &api.VolumeLocator{Name: name},
-		Source:  &api.Source{},
-		Spec: &api.VolumeSpec{
-			Size:    uint64(102400000000),
-			Format:  api.FSType_FS_TYPE_EXT4,
-			HaLevel: 1,
-		},
-	}
-	volID, err := volDriver.Create(req.GetLocator(), req.GetSource(), req.GetSpec())
-	if err != nil {
-		logrus.Errorf("Unable to create objectstore volume: %v", volID)
-		return err
-	}
-	return createObjectstore(d.constructURL(pxNode.Addresses[0]), name)
-}
-func createObjectstore(pxEndpoint, volID string) error {
-	c, err := client.NewClient(pxEndpoint, "", "")
-	if err != nil {
-		return err
-	}
-	req := c.Post().Resource(objectstorPath)
-	req.QueryOption("volumeid", volID)
-	logrus.Info("Objectstore URL:v", req.URL().String())
-	resp := req.Do()
-	return resp.Error()
-}
 
 // GetClusterPairingInfo return underlying storage details
 func (d *portworx) GetClusterPairingInfo() (map[string]string, error) {
@@ -1050,11 +1017,6 @@ func (d *portworx) GetClusterPairingInfo() (map[string]string, error) {
 	pxNodes, err := d.schedOps.GetRemotePXNodes(remoteKubeConfigPath)
 	if err != nil {
 		logrus.Errorf("err retriving remote px nodes: %v", err)
-		return pairInfo, err
-	}
-	err = d.setupObjectstore(pxNodes[0])
-	if err != nil {
-		logrus.Errorf("Unable to set objectstore: %v", err)
 		return pairInfo, err
 	}
 	clusterMgr, err := d.getClusterManagerByAddress(pxNodes[0].Addresses[0])

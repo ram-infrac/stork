@@ -57,6 +57,7 @@ const (
 	deleteTasksWaitTimeout     = 3 * time.Minute
 	defaultRetryInterval       = 10 * time.Second
 	defaultTimeout             = 2 * time.Minute
+	defaultMigrationTimeout    = 10 * time.Minute
 )
 
 var (
@@ -1426,7 +1427,7 @@ func (k *k8s) CreateCRDObjects(pathCRDSpec string) error {
 				logrus.Info("Error Creating Migration", err)
 				return err
 			}
-			if err := k8sOps.ValidateMigration(obj.Name, defaultTimeout, defaultRetryInterval); err != nil {
+			if err := k8sOps.ValidateMigration(obj.Name, defaultMigrationTimeout, defaultRetryInterval); err != nil {
 				return &scheduler.ErrFailedToApplyCustomSpec{
 					Name:  obj.Name,
 					Cause: fmt.Sprintf("Failed to validate cluster Pair: %v. Err: %v", obj.Name, err),

@@ -18,11 +18,12 @@ func testBasicCloudMigration(t *testing.T) {
 func sanityCloudMigrationTest(t *testing.T) {
 	// TODO: get px token information from torpedo' get storage token call
 	// once it's merged in topedo , govendor and upate here
+	var err error
 	logrus.Info("Basic sanity tests for cloud migration")
-	err := dumpRemoteKubeConfig(remoteConfig)
-	logrus.Info("file writing to /opt", err)
+	err = dumpRemoteKubeConfig(remoteConfig)
+	require.NoError(t, err, "Error writing to clusterpair.yml: ")
 	info, err := volumeDriver.GetClusterPairingInfo()
-	logrus.Info("token received:", info, err)
+	require.NoError(t, err, "Error writing to clusterpair.yml: ")
 	specReq := ClusterPairRequest{
 		PairName:           remotePairName,
 		ConfigMapName:      remoteConfig,
@@ -36,10 +37,9 @@ func sanityCloudMigrationTest(t *testing.T) {
 	require.NoError(t, err, "Error creating cluster Spec")
 	// appply cluster pair spec and check status
 
-	logrus.Info("applying clusterpair")
 	err = schedulerDriver.CreateCRDObjects("./" + pairFileName)
 	require.NoError(t, err, "Error applying clusterpair")
-	logrus.Info("done", err)
+	logrus.Info("applied to  clusterpair")
 }
 
 /* func runMysqlPods() {
@@ -65,17 +65,16 @@ func sanityMigrationTest(t *testing.T) {
 	logrus.Info("Run Migration spec")
 	err = schedulerDriver.CreateCRDObjects("./migrs/migration.yml")
 	require.NoError(t, err, "Error applying migration specs")
-	logrus.Info("done", err)
 
 	ctxs[0].KubeConfig = remoteFilePath
 	err = schedulerDriver.WaitForRunning(ctxs[0], defaultWaitTimeout, defaultWaitInterval)
 	require.NoError(t, err, "Error waiting for pod to get to running state")
 
-	destroyAndWait(t, ctxs)
+	//	destroyAndWait(t, ctxs)
 
 	ctxs[0].KubeConfig = ""
 	err = schedulerDriver.WaitForRunning(ctxs[0], defaultWaitTimeout, defaultWaitInterval)
 	require.NoError(t, err, "Error waiting for pod to get to running state")
 
-	destroyAndWait(t, ctxs)
+	//	destroyAndWait(t, ctxs)
 }
