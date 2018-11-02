@@ -24,12 +24,17 @@ import (
 	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	apiextensionsclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/selection"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apimachinery/pkg/watch"
+	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/kubernetes/typed/apps/v1beta2"
@@ -74,7 +79,9 @@ type Ops interface {
 	CRDOps
 	ClusterPairOps
 	MigrationOps
+	ObjectOps
 	SetConfig(config *rest.Config)
+	SetClient(client *kubernetes.Clientset, snapClient rest.Interface, storkClient storkclientset.Interface, apiExtensionClient apiextensionsclient.Interface, dynamicInterface dynamic.Interface)
 }
 
 // EventOps is an interface to put and get k8s events
@@ -316,6 +323,8 @@ type StorageClassOps interface {
 type PersistentVolumeClaimOps interface {
 	// CreatePersistentVolumeClaim creates the given persistent volume claim
 	CreatePersistentVolumeClaim(*v1.PersistentVolumeClaim) (*v1.PersistentVolumeClaim, error)
+	// UpdatePersistentVolumeClaim updates an existing persistent volume claim
+	UpdatePersistentVolumeClaim(*v1.PersistentVolumeClaim) (*v1.PersistentVolumeClaim, error)
 	// DeletePersistentVolumeClaim deletes the given persistent volume claim
 	DeletePersistentVolumeClaim(name, namespace string) error
 	// ValidatePersistentVolumeClaim validates the given pvc
@@ -422,6 +431,8 @@ type ClusterPairOps interface {
 	ListClusterPairs() (*v1alpha1.ClusterPairList, error)
 	// DeleteClusterPair deletes the ClusterPair
 	DeleteClusterPair(string) error
+	// ValidateClusterPair validates clusterpair status
+	ValidateClusterPair(name string, timeout, retryInterval time.Duration) error
 }
 
 // MigrationOps is an interface to perfrom k8s Migration operations
@@ -436,6 +447,16 @@ type MigrationOps interface {
 	UpdateMigration(*v1alpha1.Migration) (*v1alpha1.Migration, error)
 	// DeleteMigration deletes the Migration
 	DeleteMigration(string) error
+	// ValidateMigration validate the Migration status
+	ValidateMigration(name string, timeout, retryInterval time.Duration) error
+}
+
+// ObjectOps is an interface to perform generic Object operations
+type ObjectOps interface {
+	// GetObject returns the latest object given a generic Object
+	GetObject(object runtime.Object) (runtime.Object, error)
+	// UpdateObject updates a generic Object
+	UpdateObject(object runtime.Object) (runtime.Object, error)
 }
 
 // CustomResource is for creating a Kubernetes TPR/CRD
@@ -466,10 +487,11 @@ var (
 
 type k8sOps struct {
 	client             *kubernetes.Clientset
-	snapClient         *rest.RESTClient
+	snapClient         rest.Interface
 	storkClient        storkclientset.Interface
 	apiExtensionClient apiextensionsclient.Interface
 	config             *rest.Config
+	dynamicInterface   dynamic.Interface
 }
 
 // Instance returns a singleton instance of k8sOps type
@@ -484,6 +506,32 @@ func (k *k8sOps) SetConfig(config *rest.Config) {
 	// Set the config and reset the client
 	k.config = config
 	k.client = nil
+}
+
+// NewInstance returns new instance of k8sOps by using given config
+func NewInstance(config string) (Ops, error) {
+	newInstance := &k8sOps{}
+	err := newInstance.loadClientFromKubeconfig(config)
+	if err != nil {
+		logrus.Errorf("Unable to set new instance: %v", err)
+		return nil, err
+	}
+	return newInstance, nil
+}
+
+// Set the k8s clients
+func (k *k8sOps) SetClient(
+	client *kubernetes.Clientset,
+	snapClient rest.Interface,
+	storkClient storkclientset.Interface,
+	apiExtensionClient apiextensionsclient.Interface,
+	dynamicInterface dynamic.Interface) {
+
+	k.client = client
+	k.snapClient = snapClient
+	k.storkClient = storkClient
+	k.apiExtensionClient = apiExtensionClient
+	k.dynamicInterface = dynamicInterface
 }
 
 // Initialize the k8s client if uninitialized
@@ -2191,6 +2239,19 @@ func (k *k8sOps) CreatePersistentVolumeClaim(pvc *v1.PersistentVolumeClaim) (*v1
 	return k.client.CoreV1().PersistentVolumeClaims(ns).Create(pvc)
 }
 
+func (k *k8sOps) UpdatePersistentVolumeClaim(pvc *v1.PersistentVolumeClaim) (*v1.PersistentVolumeClaim, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+
+	ns := pvc.Namespace
+	if len(ns) == 0 {
+		ns = v1.NamespaceDefault
+	}
+
+	return k.client.CoreV1().PersistentVolumeClaims(ns).Update(pvc)
+}
+
 func (k *k8sOps) DeletePersistentVolumeClaim(name, namespace string) error {
 	if err := k.initK8sClient(); err != nil {
 		return err
@@ -2778,6 +2839,42 @@ func (k *k8sOps) DeleteClusterPair(name string) error {
 	})
 }
 
+func (k *k8sOps) ValidateClusterPair(name string, timeout, retryInterval time.Duration) error {
+	if err := k.initK8sClient(); err != nil {
+		return err
+	}
+	t := func() (interface{}, bool, error) {
+		clusterPair, err := k.GetClusterPair(name)
+		if err != nil {
+			return "", true, err
+		}
+
+		if clusterPair.Status.SchedulerStatus == v1alpha1.ClusterPairStatusReady &&
+			clusterPair.Status.StorageStatus == v1alpha1.ClusterPairStatusReady {
+			return "", false, nil
+		} else if clusterPair.Status.SchedulerStatus == v1alpha1.ClusterPairStatusError ||
+			clusterPair.Status.StorageStatus == v1alpha1.ClusterPairStatusError {
+			return "", true, &ErrFailedToValidateCustomSpec{
+				Name:  name,
+				Cause: fmt.Sprintf("Storage Status %v \t Schedular Status %v", clusterPair.Status.StorageStatus, clusterPair.Status.SchedulerStatus),
+				Type:  clusterPair,
+			}
+		}
+
+		return "", true, &ErrFailedToValidateCustomSpec{
+			Name:  name,
+			Cause: fmt.Sprintf("Storage Status %v \t Schedular Status %v", clusterPair.Status.StorageStatus, clusterPair.Status.SchedulerStatus),
+			Type:  clusterPair,
+		}
+	}
+
+	if _, err := task.DoRetryWithTimeout(t, timeout, retryInterval); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 // ClusterPair APIs - END
 
 // Migration APIs - BEGIN
@@ -2822,6 +2919,40 @@ func (k *k8sOps) UpdateMigration(migration *v1alpha1.Migration) (*v1alpha1.Migra
 	}
 
 	return k.storkClient.Stork().Migrations().Update(migration)
+}
+
+func (k *k8sOps) ValidateMigration(name string, timeout, retryInterval time.Duration) error {
+	if err := k.initK8sClient(); err != nil {
+		return err
+	}
+	t := func() (interface{}, bool, error) {
+		resp, err := k.GetMigration(name)
+		if err != nil {
+			return "", true, err
+		}
+
+		if resp.Status.Status == v1alpha1.MigrationStatusSuccessful {
+			return "", false, nil
+		} else if resp.Status.Status == v1alpha1.MigrationStatusFailed {
+			return "", true, &ErrFailedToValidateCustomSpec{
+				Name:  name,
+				Cause: fmt.Sprintf("Migration Status %v", resp.Status.Status),
+				Type:  resp,
+			}
+		}
+
+		return "", true, &ErrFailedToValidateCustomSpec{
+			Name:  name,
+			Cause: fmt.Sprintf("Migration Status %v", resp.Status.Status),
+			Type:  resp,
+		}
+	}
+
+	if _, err := task.DoRetryWithTimeout(t, timeout, retryInterval); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // Migration APIs - END
@@ -2897,6 +3028,49 @@ func (k *k8sOps) ValidateCRD(resource CustomResource, timeout, retryInterval tim
 
 // CRD APIs - END
 
+// Object APIs - BEGIN
+
+func (k *k8sOps) getDynamicClient(object runtime.Object) (dynamic.ResourceInterface, error) {
+
+	objectType, err := meta.TypeAccessor(object)
+	if err != nil {
+		return nil, err
+	}
+
+	return k.dynamicInterface.Resource(object.GetObjectKind().GroupVersionKind().GroupVersion().WithResource(strings.ToLower(objectType.GetKind()) + "s")), nil
+}
+
+// GetObject returns the latest object given a generic Object
+func (k *k8sOps) GetObject(object runtime.Object) (runtime.Object, error) {
+	client, err := k.getDynamicClient(object)
+	if err != nil {
+		return nil, err
+	}
+
+	metadata, err := meta.Accessor(object)
+	if err != nil {
+		return nil, err
+	}
+	return client.Get(metadata.GetName(), metav1.GetOptions{}, "")
+}
+
+// UpdateObject updates a generic Object
+func (k *k8sOps) UpdateObject(object runtime.Object) (runtime.Object, error) {
+	unstructured, ok := object.(*unstructured.Unstructured)
+	if !ok {
+		return nil, fmt.Errorf("Unable to cast object to unstructured: %v", object)
+	}
+
+	client, err := k.getDynamicClient(object)
+	if err != nil {
+		return nil, err
+	}
+
+	return client.Update(unstructured, "")
+}
+
+// Object APIs - BEGIN
+
 func (k *k8sOps) appsClient() v1beta2.AppsV1beta2Interface {
 	return k.client.AppsV1beta2()
 }
@@ -2966,6 +3140,11 @@ func (k *k8sOps) loadClientFor(config *rest.Config) error {
 	}
 
 	k.apiExtensionClient, err = apiextensionsclient.NewForConfig(config)
+	if err != nil {
+		return err
+	}
+
+	k.dynamicInterface, err = dynamic.NewForConfig(config)
 	if err != nil {
 		return err
 	}
