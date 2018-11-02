@@ -984,58 +984,58 @@
 			"revisionTime": "2018-10-04T23:30:04Z"
 		},
 		{
-			"checksumSHA1": "1HpCBB73R8EVxxg5c7cupsQmpiU=",
+			"checksumSHA1": "SMKUTPnr8WxS0yjKYHqeFLiTTjc=",
 			"path": "github.com/portworx/torpedo/drivers/node",
-			"revision": "8046dab61ea3ecb0d9ac7bf6574a57734ce0f214",
-			"revisionTime": "2018-10-09T19:35:26Z"
+			"revision": "c88d5754ab7ed578a8ca1e80f76ac21fb7da7ca4",
+			"revisionTime": "2018-11-02T01:36:43Z"
 		},
 		{
-			"checksumSHA1": "6CzbKa5pBY/3Pg8wCnI+D6v06rg=",
+			"checksumSHA1": "fbgRn1qZpFPyUFZW1GmrNbZ4DCw=",
 			"path": "github.com/portworx/torpedo/drivers/node/ssh",
-			"revision": "8046dab61ea3ecb0d9ac7bf6574a57734ce0f214",
-			"revisionTime": "2018-10-09T19:35:26Z"
+			"revision": "c88d5754ab7ed578a8ca1e80f76ac21fb7da7ca4",
+			"revisionTime": "2018-11-02T01:36:43Z"
 		},
 		{
-			"checksumSHA1": "Yo9Zju7JfFWKG/Bwvfm4u1mlCQI=",
+			"checksumSHA1": "iBzgYrW+Q/UZvk54Ytb60Nse87Q=",
 			"path": "github.com/portworx/torpedo/drivers/scheduler",
-			"revision": "8046dab61ea3ecb0d9ac7bf6574a57734ce0f214",
-			"revisionTime": "2018-10-09T19:35:26Z"
+			"revision": "c88d5754ab7ed578a8ca1e80f76ac21fb7da7ca4",
+			"revisionTime": "2018-11-02T01:36:43Z"
 		},
 		{
-			"checksumSHA1": "Eb3PrXrEg8z4euUtStlo/BO1YUA=",
+			"checksumSHA1": "F2Jzcf7bxU8PD9DTuHyclnrPCXg=",
 			"path": "github.com/portworx/torpedo/drivers/scheduler/k8s",
-			"revision": "8046dab61ea3ecb0d9ac7bf6574a57734ce0f214",
-			"revisionTime": "2018-10-09T19:35:26Z"
+			"revision": "c88d5754ab7ed578a8ca1e80f76ac21fb7da7ca4",
+			"revisionTime": "2018-11-02T01:36:43Z"
 		},
 		{
 			"checksumSHA1": "FHpSvq/iCnDZViR/b3E2WhnwXmo=",
 			"path": "github.com/portworx/torpedo/drivers/scheduler/spec",
-			"revision": "8046dab61ea3ecb0d9ac7bf6574a57734ce0f214",
-			"revisionTime": "2018-10-09T19:35:26Z"
+			"revision": "c88d5754ab7ed578a8ca1e80f76ac21fb7da7ca4",
+			"revisionTime": "2018-11-02T01:36:43Z"
 		},
 		{
-			"checksumSHA1": "IbEBm5rK06B9VMGkzTTEaImAiOc=",
+			"checksumSHA1": "29e87yK2/rH5jOl3Vuq5cPBcnt8=",
 			"path": "github.com/portworx/torpedo/drivers/volume",
-			"revision": "8046dab61ea3ecb0d9ac7bf6574a57734ce0f214",
-			"revisionTime": "2018-10-09T19:35:26Z"
+			"revision": "c88d5754ab7ed578a8ca1e80f76ac21fb7da7ca4",
+			"revisionTime": "2018-11-02T01:36:43Z"
 		},
 		{
-			"checksumSHA1": "NFsmIeEB9aVeTb+PKG+6Z8JGAa0=",
+			"checksumSHA1": "/f4lHzE7BxvnHloAAg1GQfI9p74=",
 			"path": "github.com/portworx/torpedo/drivers/volume/portworx",
-			"revision": "8046dab61ea3ecb0d9ac7bf6574a57734ce0f214",
-			"revisionTime": "2018-10-09T19:35:26Z"
+			"revision": "c88d5754ab7ed578a8ca1e80f76ac21fb7da7ca4",
+			"revisionTime": "2018-11-02T01:36:43Z"
 		},
 		{
-			"checksumSHA1": "1mk0xlPJLTNglzOpFVvUUFvKXxU=",
+			"checksumSHA1": "jYQG45HEBGCIsTEnwmrUoFnK5r4=",
 			"path": "github.com/portworx/torpedo/drivers/volume/portworx/schedops",
-			"revision": "8046dab61ea3ecb0d9ac7bf6574a57734ce0f214",
-			"revisionTime": "2018-10-09T19:35:26Z"
+			"revision": "c88d5754ab7ed578a8ca1e80f76ac21fb7da7ca4",
+			"revisionTime": "2018-11-02T01:36:43Z"
 		},
 		{
 			"checksumSHA1": "VC6jgTB9GKVetejp30GOQKQIc3Y=",
 			"path": "github.com/portworx/torpedo/pkg/errors",
-			"revision": "8046dab61ea3ecb0d9ac7bf6574a57734ce0f214",
-			"revisionTime": "2018-10-09T19:35:26Z"
+			"revision": "c88d5754ab7ed578a8ca1e80f76ac21fb7da7ca4",
+			"revisionTime": "2018-11-02T01:36:43Z"
 		},
 		{
 			"checksumSHA1": "5IUpj+w/TVy3rj8oL3lFS0p7TEc=",

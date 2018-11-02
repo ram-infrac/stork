@@ -49,6 +49,7 @@ const (
 const (
 	podExecTimeout       = 2 * time.Minute
 	defaultRetryInterval = 10 * time.Second
+	defaultTimeout       = 2 * time.Minute
 )
 
 // errLabelPresent error type for a label being present on a node
@@ -168,7 +169,7 @@ func (k *k8sSchedOps) ValidateRemoveLabels(vol *volume.Volume) error {
 	return nil
 }
 
-func (k *k8sSchedOps) ValidateVolumeSetup(vol *volume.Volume) error {
+func (k *k8sSchedOps) ValidateVolumeSetup(vol *volume.Volume, d node.Driver) error {
 	pvName := k.GetVolumeName(vol)
 	if len(pvName) == 0 {
 		return fmt.Errorf("failed to get PV name for : %v", vol)
@@ -179,16 +180,37 @@ func (k *k8sSchedOps) ValidateVolumeSetup(vol *volume.Volume) error {
 		return err
 	}
 
+	nodes := node.GetNodesByName()
+
 	for _, p := range pods {
 		if ready := k8s.Instance().IsPodReady(p); !ready {
 			continue
 		}
+
+		currentNode, nodeExists := nodes[p.Spec.NodeName];
+		if  !nodeExists {
+			return fmt.Errorf("node %s for pod [%s] %s not found", p.Spec.NodeName, p.Namespace, p.Name)
+		}
+
+		// ignore error when a command not exactly fail, like grep when empty return exit 1
+		connOpts := node.ConnectionOpts{
+			TimeBeforeRetry: defaultRetryInterval,
+			Timeout: defaultTimeout,
+			IgnoreError: true,
+		}
+
+		volMount, _ := d.RunCommand(currentNode,
+			fmt.Sprintf("mount | grep -E '(pxd|pxfs|pxns|pxd-enc|loop)' | grep %s", pvName), connOpts)
+		if len(volMount) == 0 {
+			return fmt.Errorf("volume %s not mounted om node %s", vol.Name, currentNode.Name)
+		}
+
 		//TODO: Debug why this fails intermittently
 		//Display pod status at this point.
 		logrus.Infof("Pod [%s] %s ready for volume setup check.\n Pod phase: %v\n Pod Init Container statuses: %v\n Pod Container Statuses: %v", p.Namespace, p.Name, p.Status.Phase, p.Status.InitContainerStatuses, p.Status.ContainerStatuses)
 		containerPaths := getContainerPVCMountMap(p)
 		for containerName, path := range containerPaths {
-			pxMountCheckRegex := regexp.MustCompile(fmt.Sprintf("^(/dev/pxd.+|pxfs.+|/dev/mapper/pxd-enc.+) %s.+", path))
+			pxMountCheckRegex := regexp.MustCompile(fmt.Sprintf("^(/dev/pxd.+|pxfs.+|/dev/mapper/pxd-enc.+|/dev/loop.+) %s.+", path))
 
 			t := func() (interface{}, bool, error) {
 				output, err := k8s.Instance().RunCommandInPod([]string{"cat", "/proc/mounts"}, p.Name, containerName, p.Namespace)
@@ -311,6 +333,12 @@ func (k *k8sSchedOps) ValidateVolumeCleanup(d node.Driver) error {
 
 	orphanPodsMap := make(map[string][]string)
 	dirtyVolPodsMap := make(map[string][]string)
+	dirFindOpts := node.FindOpts{
+		ConnectionOpts: connOpts,
+		MaxDepth:       1,
+		MinDepth:       1,
+		Type:           node.Directory,
+	}
 
 	for nodeName, volDirPaths := range nodeToPodsMap {
 		var orphanPods []string
@@ -328,39 +356,55 @@ func (k *k8sSchedOps) ValidateVolumeCleanup(d node.Driver) error {
 			if found {
 				continue
 			}
-			orphanPods = append(orphanPods, podUID)
 
-			// Check if there are files under portworx volume
-			// We use a depth of 2 because the files stored in the volume are in the pvc
-			// directory under the portworx-volume folder for that pod. For instance,
-			// ../kubernetes-io~portworx-volume/pvc-<id>/<all_user_files>
 			n := nodeMap[nodeName]
-			findFileOpts := node.FindOpts{
-				ConnectionOpts: connOpts,
-				MinDepth:       2,
-				MaxDepth:       2,
-			}
-			files, _ := d.FindFiles(path, n, findFileOpts)
-			if len(strings.TrimSpace(files)) > 0 {
-				dirtyVolPods = append(dirtyVolPods, podUID)
+			// Check if /var/lib/kubelet/pods/{podUID}/volumes/kubernetes.io~portworx-volume is empty
+			if !isDirEmpty(path, n, d) {
+				pvcDirsFind, _ := d.FindFiles(path, n, dirFindOpts)
+				pvcDirs := separateFilePaths(pvcDirsFind)
+				for _, pvcDir := range pvcDirs {
+					// Check if /var/lib/kubelet/pods/{podUID}/volumes/kubernetes.io~portworx-volume/{pvc} is empty
+					if isDirEmpty(pvcDir, n, d) {
+						orphanPods = append(orphanPods, podUID)
+					} else {
+						dirtyVolPods = append(dirtyVolPods, podUID)
+					}
+				}
 			}
 		}
 
 		if len(orphanPods) > 0 {
 			orphanPodsMap[nodeName] = orphanPods
-			if len(dirtyVolPods) > 0 {
-				dirtyVolPodsMap[nodeName] = dirtyVolPods
-			}
+		}
+		if len(dirtyVolPods) > 0 {
+			dirtyVolPodsMap[nodeName] = dirtyVolPods
 		}
 	}
 
-	if len(orphanPodsMap) == 0 {
+	if len(dirtyVolPodsMap) == 0 {
 		return nil
 	}
 	return &ErrFailedToCleanupVolume{
 		OrphanPods:   orphanPodsMap,
 		DirtyVolPods: dirtyVolPodsMap,
 	}
+}
+
+func isDirEmpty(path string, n node.Node, d node.Driver) bool {
+	emptyDirsFindOpts := node.FindOpts{
+		ConnectionOpts: node.ConnectionOpts{
+			Timeout:         1 * time.Minute,
+			TimeBeforeRetry: 10 * time.Second,
+		},
+		MaxDepth: 0,
+		MinDepth: 0,
+		Type:     node.Directory,
+		Empty:    true,
+	}
+	if emptyDir, _ := d.FindFiles(path, n, emptyDirsFindOpts); len(emptyDir) == 0 {
+		return false
+	}
+	return true
 }
 
 func (k *k8sSchedOps) GetServiceEndpoint() (string, error) {
@@ -512,6 +556,37 @@ func (k *k8sSchedOps) IsPXEnabled(n node.Node) (bool, error) {
 	return true, nil
 }
 
+// GetRemotePXNodes returns list of PX node found on destination k8s cluster
+// refereced by kubeconfig
+func (k *k8sSchedOps) GetRemotePXNodes(destKubeConfig string) ([]node.Node, error) {
+	var addrs []string
+	var remoteNodeList []node.Node
+
+	pxNodes, err := getPXNodes(destKubeConfig)
+	if err != nil {
+		logrus.Errorf("Error getting PX Nodes %v : %v", pxNodes, err)
+		return nil, err
+	}
+
+	for _, pxNode := range pxNodes {
+		logrus.Info("px node on remote :", pxNode.Name)
+		for _, addr := range pxNode.Status.Addresses {
+			if addr.Type == corev1.NodeExternalIP || addr.Type == corev1.NodeInternalIP {
+				addrs = append(addrs, addr.Address)
+			}
+		}
+		newNode := node.Node{
+			Name:      pxNode.Name,
+			Addresses: addrs,
+			Type:      node.TypeWorker,
+		}
+
+		remoteNodeList = append(remoteNodeList, newNode)
+	}
+
+	return remoteNodeList, nil
+}
+
 // getContainerPVCMountMap is a helper routine to return map of containers in the pod that
 // have a PVC. The values in the map are the mount paths of the PVC
 func getContainerPVCMountMap(pod corev1.Pod) map[string]string {
@@ -559,6 +634,31 @@ func extractPodUID(volDirPath string) string {
 		return match[1]
 	}
 	return ""
+}
+
+// return PX nodes on k8s cluster provided by kubeconfig file
+func getPXNodes(destKubeConfig string) ([]corev1.Node, error) {
+	var pxNodes []corev1.Node
+	// get schd-ops/k8s instance of destination cluster
+	destClient, err := k8s.NewInstance(destKubeConfig)
+	if err != nil {
+		logrus.Errorf("Unable to get k8s instance: %v", err)
+		return nil, err
+	}
+
+	nodes, err := destClient.GetNodes()
+	if err != nil {
+		return nil, err
+	}
+
+	// get label on node where PX is Enabled
+	for _, node := range nodes.Items {
+		if node.Labels[pxEnabled] == "true" {
+			pxNodes = append(pxNodes, node)
+		}
+	}
+
+	return pxNodes, nil
 }
 
 func init() {
