@@ -245,7 +245,7 @@ func CreateClusterPairSpec(req ClusterPairRequest) error {
 		log.Error("Couldn't write to clsuterPair.yaml: %v", err)
 		return err
 	}
-	logrus.Info("Created Clusterpair file:", req.SpecDirPath+pairFileName)
+	logrus.Info("Created Clusterpair file")
 	return nil
 }
 
@@ -286,7 +286,7 @@ func parseKubeConfig(configObject string) (*KubeConfigSpec, error) {
 
 func getContextCRD(specName string) (*scheduler.Context, error) {
 	logrus.Infof("Creating schedular context")
-	specs, err := schedulerDriver.ParseSpecs("./migrs" + specName + ".yaml")
+	specs, err := schedulerDriver.ParseSpecs("./migrs/" + specName + ".yaml")
 	if err != nil {
 		logrus.Errorf("Unable to parse specs %v", err)
 		return nil, err

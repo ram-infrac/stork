@@ -187,16 +187,16 @@ func (k *k8sSchedOps) ValidateVolumeSetup(vol *volume.Volume, d node.Driver) err
 			continue
 		}
 
-		currentNode, nodeExists := nodes[p.Spec.NodeName];
-		if  !nodeExists {
+		currentNode, nodeExists := nodes[p.Spec.NodeName]
+		if !nodeExists {
 			return fmt.Errorf("node %s for pod [%s] %s not found", p.Spec.NodeName, p.Namespace, p.Name)
 		}
 
 		// ignore error when a command not exactly fail, like grep when empty return exit 1
 		connOpts := node.ConnectionOpts{
 			TimeBeforeRetry: defaultRetryInterval,
-			Timeout: defaultTimeout,
-			IgnoreError: true,
+			Timeout:         defaultTimeout,
+			IgnoreError:     true,
 		}
 
 		volMount, _ := d.RunCommand(currentNode,
@@ -653,7 +653,8 @@ func getPXNodes(destKubeConfig string) ([]corev1.Node, error) {
 
 	// get label on node where PX is Enabled
 	for _, node := range nodes.Items {
-		if node.Labels[pxEnabled] == "true" {
+		// worker node and px is not disabled
+		if !destClient.IsNodeMaster(node) && node.Labels[pxEnabled] != "false" {
 			pxNodes = append(pxNodes, node)
 		}
 	}

@@ -28,7 +28,7 @@ func sanityCloudMigrationTest(t *testing.T) {
 	specReq := ClusterPairRequest{
 		PairName:           remotePairName,
 		ConfigMapName:      remoteConfig,
-		SpecDirPath:        "./migrs",
+		SpecDirPath:        "./migrs/",
 		RemoteIP:           info[clusterIP],
 		RemoteClusterToken: info[clusterToken],
 		RemotePort:         info[clusterPort],
@@ -57,7 +57,7 @@ func sanityMigrationTest(t *testing.T) {
 	logrus.Info("Run Migration spec")
 
 	// appply cluster pair spec and check status
-	ctx, err := getContextCRD("migration-spec")
+	ctx, err := getContextCRD("migration")
 	require.NoError(t, err, "Error locating migration Spec")
 
 	err = schedulerDriver.CreateCRDObjects(ctx, 2*time.Minute, 10*time.Second)

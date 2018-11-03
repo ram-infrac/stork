@@ -101,8 +101,7 @@ type Driver interface {
 	// GetAggregationLevel returns the aggregation level for the given volume
 	GetAggregationLevel(vol *Volume) (int64, error)
 
-	  GetClusterPairingInfo() (map[string]string, error)
-
+	GetClusterPairingInfo() (map[string]string, error)
 }
 
 var (
