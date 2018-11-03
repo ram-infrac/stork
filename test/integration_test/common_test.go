@@ -8,6 +8,7 @@ import (
 	"html/template"
 	"io/ioutil"
 	"os"
+	"strconv"
 	"testing"
 	"time"
 
@@ -217,10 +218,14 @@ func CreateClusterPairSpec(req ClusterPairRequest) error {
 		return err
 	}
 	// CreateClusterPair spec req
+	remotePort, err := strconv.Atoi(req.RemotePort)
+	if err != nil {
+		return err
+	}
 	clusterPair := &ClusterPair{
 		PairName:             req.PairName,
 		RemoteIP:             req.RemoteIP,
-		RemotePort:           9001, //strconv.Atoi(req.RemotePort),
+		RemotePort:           remotePort,
 		RemoteToken:          req.RemoteClusterToken,
 		RemoteKubeServer:     kubeSpec.ClusterInfo[0].Cluster["server"],
 		RemoteConfigAuthData: kubeSpec.ClusterInfo[0].Cluster["certificate-authority-data"],
@@ -279,25 +284,19 @@ func parseKubeConfig(configObject string) (*KubeConfigSpec, error) {
 	return spec, nil
 }
 
-func getContextCRD(key string) (*scheduler.Context, error) {
+func getContextCRD(specName string) (*scheduler.Context, error) {
 	logrus.Infof("Creating schedular context")
-	k, err := spec.NewFactory("./migrs", nil)
+	specs, err := schedulerDriver.ParseSpecs("./migrs" + specName + ".yaml")
 	if err != nil {
-		logrus.Errorf("Unable to get parser: %v", err)
+		logrus.Errorf("Unable to parse specs %v", err)
 		return nil, err
 	}
-	logrus.Infof("Created schedular context %v", k)
-	specs, err := k.Get(key)
-	if err != nil {
-		logrus.Errorf("Unable to get spec %v: %v", key, err)
-		return nil, err
-	}
-	logrus.Infof("Got key %v", specs)
+
+	logrus.Infof("Created schedular context %v", specs)
 	ctx := &scheduler.Context{
-		//UID: key,
 		App: &spec.AppSpec{
-			Key:      key,
-			SpecList: specs.SpecList,
+			Key:      specName,
+			SpecList: specs,
 		},
 	}
 
