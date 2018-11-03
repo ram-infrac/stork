@@ -1,0 +1,70 @@
+{
+	"comment": "",
+	"ignore": "",
+	"package": [
+		{
+			"checksumSHA1": "SMKUTPnr8WxS0yjKYHqeFLiTTjc=",
+			"origin": "github.com/libopenstorage/stork/vendor/github.com/portworx/torpedo/drivers/node",
+			"path": "github.com/portworx/torpedo/drivers/node",
+			"revision": "c88d5754ab7ed578a8ca1e80f76ac21fb7da7ca4",
+			"revisionTime": "2018-11-02T01:36:43Z"
+		},
+		{
+			"checksumSHA1": "fbgRn1qZpFPyUFZW1GmrNbZ4DCw=",
+			"origin": "github.com/libopenstorage/stork/vendor/github.com/portworx/torpedo/drivers/node/ssh",
+			"path": "github.com/portworx/torpedo/drivers/node/ssh",
+			"revision": "c88d5754ab7ed578a8ca1e80f76ac21fb7da7ca4",
+			"revisionTime": "2018-11-02T01:36:43Z"
+		},
+		{
+			"checksumSHA1": "iBzgYrW+Q/UZvk54Ytb60Nse87Q=",
+			"origin": "github.com/libopenstorage/stork/vendor/github.com/portworx/torpedo/drivers/scheduler",
+			"path": "github.com/portworx/torpedo/drivers/scheduler",
+			"revision": "c88d5754ab7ed578a8ca1e80f76ac21fb7da7ca4",
+			"revisionTime": "2018-11-02T01:36:43Z"
+		},
+		{
+			"checksumSHA1": "F2Jzcf7bxU8PD9DTuHyclnrPCXg=",
+			"origin": "github.com/libopenstorage/stork/vendor/github.com/portworx/torpedo/drivers/scheduler/k8s",
+			"path": "github.com/portworx/torpedo/drivers/scheduler/k8s",
+			"revision": "c88d5754ab7ed578a8ca1e80f76ac21fb7da7ca4",
+			"revisionTime": "2018-11-02T01:36:43Z"
+		},
+		{
+			"checksumSHA1": "FHpSvq/iCnDZViR/b3E2WhnwXmo=",
+			"origin": "github.com/libopenstorage/stork/vendor/github.com/portworx/torpedo/drivers/scheduler/spec",
+			"path": "github.com/portworx/torpedo/drivers/scheduler/spec",
+			"revision": "c88d5754ab7ed578a8ca1e80f76ac21fb7da7ca4",
+			"revisionTime": "2018-11-02T01:36:43Z"
+		},
+		{
+			"checksumSHA1": "29e87yK2/rH5jOl3Vuq5cPBcnt8=",
+			"origin": "github.com/libopenstorage/stork/vendor/github.com/portworx/torpedo/drivers/volume",
+			"path": "github.com/portworx/torpedo/drivers/volume",
+			"revision": "c88d5754ab7ed578a8ca1e80f76ac21fb7da7ca4",
+			"revisionTime": "2018-11-02T01:36:43Z"
+		},
+		{
+			"checksumSHA1": "/f4lHzE7BxvnHloAAg1GQfI9p74=",
+			"origin": "github.com/libopenstorage/stork/vendor/github.com/portworx/torpedo/drivers/volume/portworx",
+			"path": "github.com/portworx/torpedo/drivers/volume/portworx",
+			"revision": "c88d5754ab7ed578a8ca1e80f76ac21fb7da7ca4",
+			"revisionTime": "2018-11-02T01:36:43Z"
+		},
+		{
+			"checksumSHA1": "jYQG45HEBGCIsTEnwmrUoFnK5r4=",
+			"origin": "github.com/libopenstorage/stork/vendor/github.com/portworx/torpedo/drivers/volume/portworx/schedops",
+			"path": "github.com/portworx/torpedo/drivers/volume/portworx/schedops",
+			"revision": "c88d5754ab7ed578a8ca1e80f76ac21fb7da7ca4",
+			"revisionTime": "2018-11-02T01:36:43Z"
+		},
+		{
+			"checksumSHA1": "VC6jgTB9GKVetejp30GOQKQIc3Y=",
+			"origin": "github.com/libopenstorage/stork/vendor/github.com/portworx/torpedo/pkg/errors",
+			"path": "github.com/portworx/torpedo/pkg/errors",
+			"revision": "c88d5754ab7ed578a8ca1e80f76ac21fb7da7ca4",
+			"revisionTime": "2018-11-02T01:36:43Z"
+		}
+	],
+	"rootPath": "github.com/libopenstorage/stork"
+}
