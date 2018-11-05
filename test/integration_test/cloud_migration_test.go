@@ -25,24 +25,15 @@ func sanityClusterPairTest(t *testing.T) {
 	info, err := volumeDriver.GetClusterPairingInfo()
 	require.NoError(t, err, "Error writing to clusterpair.yml: ")
 
-	specReq := ClusterPairRequest{
-		PairName:           remotePairName,
-		ConfigMapName:      remoteConfig,
-		SpecDirPath:        "./migrs/",
-		RemoteIP:           info[clusterIP],
-		RemoteClusterToken: info[clusterToken],
-		RemotePort:         info[clusterPort],
-	}
-	logrus.Info("Writing to spec file", specReq)
-
-	err = CreateClusterPairSpec(specReq)
+	err = createClusterPair()
 	require.NoError(t, err, "Error creating cluster Spec")
 
-	ctx, err := getContextCRD("cluster-pair")
-	require.NoError(t, err, "Error locating cluster Spec")
+	err = schedulerDriver.RescanSpecs("./migrs")
+	require.NoError(t, err, "Unable to parse spec dir")
 
-	err = schedulerDriver.CreateCRDObjects(ctx, 2*time.Minute, 10*time.Second)
-	require.NoError(t, err, "Error applying clusterpair")
+	ctxs, err := schedulerDriver.Schedule("clusterpair",
+		scheduler.ScheduleOptions{AppKeys: []string{"cluster-pair"}})
+	require.NoError(t, err, "Error scheduling task")
 
 	logrus.Info("Validated Cluster Pair Specs")
 }

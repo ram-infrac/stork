@@ -14,6 +14,7 @@ import (
 
 	storkdriver "github.com/libopenstorage/stork/drivers/volume"
 	_ "github.com/libopenstorage/stork/drivers/volume/portworx"
+	"github.com/libopenstorage/stork/pkg/storkctl"
 	"github.com/portworx/sched-ops/k8s"
 	k8s_ops "github.com/portworx/sched-ops/k8s"
 	"github.com/portworx/torpedo/drivers/node"
@@ -326,6 +327,19 @@ func setRemoteConfig(kubeConfig string) error {
 
 	k8sOps.SetConfig(config)
 	return nil
+}
+
+func createClusterPair() error {
+	f, err := os.Create("./cluster-pair.yaml")
+	if err != nil {
+		logrus.Error("Unable to create clusterPair.yaml: %v", err)
+		return err
+	}
+	cmd := storkctl.NewCommand(os.Stdin, f, os.Stdout)
+	cmd.SetArgs([]string{"generate", "clusterpair", "--kubeconfig", remoteFilePath})
+	if err := cmd.Execute(); err != nil {
+		return err
+	}
 }
 
 func init() {
